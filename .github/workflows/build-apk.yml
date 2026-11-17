@@ -4,11 +4,12 @@ name: Build BD Price Finder APK
 on:
   workflow_dispatch:
   push:
-    branches: [ main, master ]
+    branches: [main, master]
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -24,12 +25,36 @@ jobs:
         with:
           gradle-version: '8.9'
 
-      - name: Build debug APK
-        run: gradle assembleDebug
+      - name: Find Android project and build APK
+        id: build
+        shell: bash
+        run: |
+          APP_FILE=$(find . -type f -path '*/app/build.gradle.kts' | head -n 1)
+
+          if [ -z "$APP_FILE" ]; then
+            echo "ERROR: app/build.gradle.kts not found!"
+            find . -maxdepth 4 -type f
+            exit 1
+          fi
+
+          PROJECT_DIR=$(dirname "$(dirname "$APP_FILE")")
+
+          echo "Android project: $PROJECT_DIR"
+
+          gradle -p "$PROJECT_DIR" :app:assembleDebug
+
+          APK="$PROJECT_DIR/app/build/outputs/apk/debug/app-debug.apk"
+
+          if [ ! -f "$APK" ]; then
+            echo "APK not found!"
+            exit 1
+          fi
+
+          echo "apk_path=$APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: BD-Price-Finder-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: BD-Price-Finder-APK
+          path: ${{ steps.build.outputs.apk_path }}
           if-no-files-found: error
